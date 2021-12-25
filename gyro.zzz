@@ -1,0 +1,23 @@
+pkgs:
+  routez:
+    version: 0.0.0
+    description: "Http server for Zig"
+    license: MIT
+    source_url: "https://github.com/Balint66/routez"
+
+    root: src/routez.zig
+    files:
+      README.md
+      LICENSE
+      build.zig
+      src/routez/*.zig
+      src/routez.zig
+      src/routez/http/*.zig
+deps:
+  zuri:
+    src:
+      github:
+        user: Balint66
+        repo: zuri
+        ref: master
+    root: src/zuri.zig

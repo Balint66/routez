@@ -1,25 +1,22 @@
 const std = @import("std");
 const Builder = std.build.Builder;
+const pkgs = @import("deps.zig").pkgs;
+const exports = @import("deps.zig").exports;
 
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
     const tests = b.addTest("test.zig");
     tests.setBuildMode(mode);
-    tests.addPackagePath("zuri", "zuri/src/zuri.zig");
+    pkgs.addAllTo(tests);
+    //tests.addPackagePath("zuri", "zuri/src/zuri.zig");
 
     const test_step = b.step("test", "Run library tests");
     test_step.dependOn(&tests.step);
 
     var basic = b.addExecutable("basic", "examples/basic.zig");
     basic.setBuildMode(mode);
-    basic.addPackage(.{
-        .name = "routez",
-        .path = "src/routez.zig",
-        .dependencies = &[_]std.build.Pkg{.{
-            .name = "zuri",
-            .path = "zuri/src/zuri.zig",
-        }},
-    });
+    pkgs.addAllTo(basic);
+    basic.addPackage(exports.routez);
     basic.setOutputDir("zig-cache");
     basic.install();
     const basic_step = b.step("basic", "Basic example");

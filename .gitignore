@@ -1,2 +1,4 @@
 .vscode/
+.gyro/
+zig-out/
 zig-cache/

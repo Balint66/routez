@@ -9,13 +9,20 @@ const builtin = @import("builtin");
 const request = @import("http/request.zig");
 const response = @import("http/response.zig");
 const parser = @import("http/parser.zig");
-usingnamespace @import("http.zig");
-usingnamespace @import("router.zig");
+const http = @import("http.zig");
+const router = @import("router.zig");
+const Version = @import("http/common.zig").Version;
+const Method = http.Method;
+const Request = http.Request;
+const Response = http.Response;
+const Headers = http.Headers;
+const Router = router.Router;
+const HandlerFn = router.HandlerFn;
 
 pub const Server = struct {
     server: StreamServer,
     handler: HandlerFn,
-    allocator: *Allocator,
+    allocator: Allocator,
     config: Config,
     discards: DiscardStack,
 
@@ -84,7 +91,7 @@ pub const Server = struct {
         none,
     };
 
-    pub fn init(allocator: *Allocator, config: Config, handlers: anytype) Server {
+    pub fn init(allocator: Allocator, config: Config, handlers: anytype) Server {
         return .{
             .server = StreamServer.init(.{}),
             .handler = Router(handlers),
@@ -146,7 +153,7 @@ pub const Server = struct {
         defer context.server.discards.push(&context.node);
 
         const up = handleHttp(context) catch |e| {
-            std.debug.warn("error in http handler: {}\n", .{e});
+            std.debug.print("error in http handler: {}\n", .{e});
             return;
         };
 
@@ -166,7 +173,7 @@ pub const Server = struct {
         // for use in headers and allocations in handlers
         var arena = ArenaAllocator.init(ctx.server.allocator);
         defer arena.deinit();
-        const alloc = &arena.allocator;
+        const alloc = arena.allocator();
 
         while (true) {
             var req = request.Request{
@@ -184,6 +191,9 @@ pub const Server = struct {
                 .allocator = alloc,
             };
             try ctx.read();
+            if (ctx.count == 0) {
+                return .none;
+            }
 
             if (parser.parse(&req, ctx)) {
                 var frame = @asyncCall(ctx.stack, {}, ctx.server.handler, .{ &req, &res, req.path });
@@ -204,13 +214,11 @@ pub const Server = struct {
             arena.deinit();
             arena = ArenaAllocator.init(ctx.server.allocator);
             buf.resize(0) catch unreachable;
-            // TODO keepalive here
-            return .none;
         }
         return .none;
     }
 
-    fn writeResponse(server: *Server, writer: anytype, req: Request, res: Response) !void {
+    fn writeResponse(_: *Server, writer: anytype, req: Request, res: Response) !void {
         const body = res.body.context.items;
         const is_head = mem.eql(u8, req.method, Method.Head);
 
@@ -219,7 +227,18 @@ pub const Server = struct {
         for (res.headers.list.items) |header| {
             try writer.print("{s}: {s}\r\n", .{ header.name, header.value });
         }
-        try writer.writeAll("connection: close\r\n");
+
+        const keep_alive = switch (req.version) {
+            Version.Http09 => false,
+            Version.Http10 => req.headers.hasTokenIgnoreCase("connection", "keep-alive"),
+            else => !req.headers.hasTokenIgnoreCase("connection", "close"),
+        };
+        if (keep_alive) {
+            try writer.writeAll("connection: keep-alive\r\n");
+        } else {
+            try writer.writeAll("connection: close\r\n");
+        }
+
         if (is_head) {
             try writer.writeAll("content-length: 0\r\n\r\n");
         } else {
