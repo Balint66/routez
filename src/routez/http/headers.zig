@@ -86,7 +86,7 @@ pub const Headers = struct {
     //     // var old = get()
     // }
 
-    pub fn has(_: *Headers, name: []const u8) bool {
+    pub fn has(headers: *Headers, name: []const u8) bool {
         for (headers.list.items) |*h| {
             if (mem.eql(u8, h.name, name)) {
                 return true;

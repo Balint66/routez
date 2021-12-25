@@ -42,5 +42,5 @@ fn postHandler(_: Request, res: Response, args: *const struct {
 
 var counter = std.atomic.Atomic(usize).init(0);
 fn counterHandler(_: Request, res: Response) !void {
-    try res.print("Page loaded {d} times\n", .{counter.fetchAdd(1, std.atomic.Ordering.Monotonic)});
+    try res.print("Page loaded {d} times\n", .{counter.fetchAdd(1, .SeqCst)});
 }
